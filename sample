@@ -1,0 +1,290 @@
+<?php
+
+  class ReportesController extends AppController{
+
+      var $name = 'Reportes';
+      var $components = array('RequestHandler','Session');
+      var $helpers = array('Html','Form','Ajax','Javascript','Js','GoogleMap','Pdf');
+      var $uses = array('ServiciosTelefonicos', 'ServiciosProgramados','Operadores','UnidadesEnServicio','Ciudades','Localidades','Colonias','Calles','Phones','UnidadesFueraCiudad','TpoServicio');
+
+    function street($in_var=null){
+
+      $st = $this->Calles->find('all');
+      if(!empty($st)){
+	foreach( $st as $key => $value ){
+	  $street[ $st[$key]['Calles']['id_calle'] ] = $st[$key]['Calles']['calle'];
+	}
+      }else{
+	$street=null;
+      }
+
+      if (isset($in_var)) {
+	  return $street;
+      } else {
+	  $this->set('street',$street);
+      }
+
+    } //End street
+
+    function colonias($in_var=null){
+    $col = $this->Colonias->find('all');
+	foreach( $col as $key => $value ){
+	  $colony[ $col[$key]['Colonias']['id_colonia'] ] = $col[$key]['Colonias']['colonia'];
+	}
+	$colonia = array_map('utf8_encode',$colony);
+
+	if (isset($in_var)) {
+	    return $colonia;
+	} else {
+	    $this->set('colonia',$colonia);
+	}
+
+    } //End colonias
+
+    function localidades($in_var=null){
+	$loc = $this->Localidades->find('all');
+	foreach( $loc as $key => $value ){
+	    $localidad[ $loc[$key]['Localidades']['id_localidad'] ] = $loc[$key]['Localidades']['localidad'];
+	}
+	$localidades = array_map('utf8_encode',$localidad);
+	
+	if (isset($in_var)) {
+	    return $localidades;
+	} else {
+	    $this->set('localidades',$localidades);
+	}
+	
+    } //End localidades
+
+    function tpo_servicio($in_var=null){
+	$tpo_srv = $this->TpoServicio->find('all');
+	foreach( $tpo_srv as $key => $value ){
+	    $tpo_servicio[ $tpo_srv[$key]['TpoServicio']['id_tpo_servicio'] ] = $tpo_srv[$key]['TpoServicio']['tpo_servicio'];
+	}
+	$TpoServicio = array_map('utf8_encode',$tpo_servicio);
+	
+	if (isset($in_var)) {
+	    return $TpoServicio;
+	} else {
+	    $this->set('TpoServicio',$TpoServicio);
+	}
+	
+    } //End tpo_de_servicio
+
+      function index(){
+
+      }
+
+      function SearchReportes(){
+	$data = $this->data['Reportes']['data'];
+	if(is_array($data)){
+	// Just for Compability with Firefox
+	    $date['0'] = $data['year'];
+	    $date['1'] = $data['month'];
+	    $date['2'] = $data['day'];
+	}if(is_string($data)){
+	    $data = $this->data['Reportes']['data'];
+	    $date = explode('-',$data);
+	}else{
+// 	    Nothing
+// 	    $this->redirect(array('action' => 'index'));
+	}
+	$week = date("W", mktime(0, 0, 0, $date[1], $date[2], $date[0]));
+
+	$conditions['ServiciosTelefonicos.fecha'] = "$date[0]-$date[1]-$date[2]";
+	$conditions['ServiciosTelefonicos.turno'] = $_SESSION['Auth']['User']['turno'];
+	$conditions['ServiciosTelefonicos.username'] = $_SESSION['Auth']['User']['username'];
+	$wconditions['ServiciosProgramados.week'] = $week;
+	$wconditions['ServiciosProgramados.turno'] = $_SESSION['Auth']['User']['turno'];
+	$wconditions['ServiciosProgramados.username'] = $_SESSION['Auth']['User']['username'];
+
+// 	$cconditions['UnidadesFueraCiudad.week'] = $week;
+	$cconditions['UnidadesFueraCiudad.fecha'] = "$date[0]-$date[1]-$date[2]";
+	$cconditions['UnidadesFueraCiudad.turno'] = $_SESSION['Auth']['User']['turno'];
+// 	$cconditions['UnidadesFueraCiudad.username'] = $_SESSION['Auth']['User']['username'];
+	
+	$daily_report = $this->ServiciosTelefonicos->find('all',array('conditions'=>$conditions));
+	$weekly_report = $this->ServiciosProgramados->find('all',array('conditions'=>$wconditions));
+	$city_report = $this->UnidadesFueraCiudad->find('all',array('conditions'=>$cconditions));
+	$this->street();
+	$this->colonias();
+	$this->localidades();
+	$this->tpo_servicio();
+// 	pr($city_report);exit();
+	$this->set('date',"$date[0]-$date[1]-$date[2]");
+	$this->set('week',$week);
+	$this->set('city_report',$city_report);
+	$this->set('daily_report',$daily_report);
+	$this->set('weekly_report',$weekly_report);
+      }
+
+    function CreatePdf(){
+// 	pr($this->data);exit();
+	$cty = $prog = $tel = <<<EOF
+	<style>
+	th {
+	    color: navy;
+	    font-family: Verdana;
+	    font-size: 7pt;
+	    text-align:center;
+	}
+
+	td {
+	    border: 1px solid black;
+	    background-color: #ECECEC;
+	    color: black;
+	    font-family: Arial;
+	    font-size: 6pt;
+	    text-align:center;
+	    font-variant:small-caps;
+	}
+	</style>
+EOF;
+	$tel .= '<table width="100%">'.
+		    '<tr>'.
+			'<th width="15">ID</th>'.
+			'<th width="50">MOVIL</th>'.
+			'<th width="80">ECONOMICO</th>'.
+			'<th width="133">COLONIA</th>'.
+			'<th width="133">CALLE</th>'.
+			'<th>N&Uacute;MERO</th>'.
+			'<th>TELEFONO</th>'.
+			'<th>HORA</th>'.
+		    '</tr>';
+	$prog .= '<table width="100%">'.
+		    '<tr>'.
+			'<th width="15">ID</th>'.
+			'<th width="50">HORA</th>'.
+			'<th width="87">COLONIA</th>'.
+			'<th width="89">CALLE</th>'.
+			'<th>N&Uacute;MERO</th>'.
+			'<th>HORA</th>'.
+			'<th width="45">L</th>'.
+			'<th width="45">M</th>'.
+			'<th width="45">M</th>'.
+			'<th width="45">J</th>'.
+			'<th width="45">V</th>'.
+			'<th width="45">S</th>'.
+			'<th width="45">D</th>'.
+		    '</tr>';
+	$cty .= '<table width="100%">'.
+		    '<tr>'.
+			'<th width="15">ID</th>'.
+			'<th width="50">MOVIL</th>'.
+			'<th width="180">LOCALIDAD</th>'.
+			'<th width="180">TIPO DE SERVICIO</th>'.
+			'<th width="80">HORA SALIDA</th>'.
+			'<th width="80">HORA LLEGADA</th>'.
+			'<th>MOM</th>'.
+		    '</tr>';
+
+	$date = $this->data['Pdf']['date'];
+	$week = $this->data['Pdf']['week'];
+	$turno = $_SESSION['Auth']['User']['turno'];
+	$username = $_SESSION['Auth']['User']['username'];
+
+	$conditions['ServiciosTelefonicos.fecha'] = $date;
+	$conditions['ServiciosTelefonicos.turno'] = $turno;
+	$conditions['ServiciosTelefonicos.username'] = $username;
+
+	$wconditions['ServiciosProgramados.week'] = $week;
+	$wconditions['ServiciosProgramados.turno'] = $turno;
+	$wconditions['ServiciosProgramados.username'] = $username;
+	
+	$cconditions['UnidadesFueraCiudad.fecha'] = $date;
+	$cconditions['UnidadesFueraCiudad.turno'] = $turno;
+// 	$cconditions['UnidadesFueraCiudad.username'] = $_SESSION['Auth']['User']['username'];
+	
+	$daily_report = $this->ServiciosTelefonicos->find('all',array('conditions'=>$conditions));
+	
+	$weekly_report = $this->ServiciosProgramados->find('all',array('conditions'=>$wconditions));
+	
+	$city_report = $this->UnidadesFueraCiudad->find('all',array('conditions'=>$cconditions));
+	
+	$street = $this->street(1);
+	$colonia = $this->colonias(1);
+	$localidades = $this->localidades(1);
+	$TpoServicio = $this->tpo_servicio(1);
+
+	$idx = 1;
+	foreach($daily_report as $key => $value){
+	    $tel .= "<tr>";
+	    $tel .= '<td width="15">'.$idx++."</td>";
+	    $tel .= '<td width="50">'.$value['ServiciosTelefonicos']['id_movil']."</td>";
+	    $tel .= '<td width="80">'.$value['ServiciosTelefonicos']['id_economico']."</td>";
+	    $tel .= '<td width="133">'.$colonia[$value['ServiciosTelefonicos']['id_colonia']]."</td>";
+	    $tel .= '<td width="133">'.$street[$value['ServiciosTelefonicos']['id_calle']]."</td>";
+	    $tel .= "<td>".$value['ServiciosTelefonicos']['numero']."</td>";
+	    $tel .= "<td>".$value['ServiciosTelefonicos']['telefono']."</td>";
+	    $tel .= "<td>".$value['ServiciosTelefonicos']['hora']."</td>";
+	    $tel .= "</tr>";
+	}
+
+	$idx=1;
+	foreach($weekly_report as $key => $value){
+	    $prog .= "<tr>";
+	    $prog .= '<td width="15">'.$idx++."</td>";
+	    $prog .= '<td width="50">'.$value['ServiciosProgramados']['hora']."</td>";
+	    $prog .= '<td width="87">'.$value['Calle']['Colonia']['colonia']."</td>";
+	    $prog .= '<td width="89">'.$value['Calle']['calle']."</td>";
+	    $prog .= "<td>".$value['ServiciosProgramados']['numero']."</td>";
+	    $prog .= '<td width="45">'.$value['ServiciosProgramados']['lunes']."</td>";
+	    $prog .= '<td width="45">'.$value['ServiciosProgramados']['martes']."</td>";
+	    $prog .= '<td width="45">'.$value['ServiciosProgramados']['miercoles']."</td>";
+	    $prog .= '<td width="45">'.$value['ServiciosProgramados']['jueves']."</td>";
+	    $prog .= '<td width="45">'.$value['ServiciosProgramados']['viernes']."</td>";
+	    $prog .= '<td width="45">'.$value['ServiciosProgramados']['sabado']."</td>";
+	    $prog .= '<td width="45">'.$value['ServiciosProgramados']['domingo']."</td>";
+	    $prog .= "</tr>";
+	}
+
+	$idx = 1;
+	foreach($city_report as $key => $value){
+	    $cty .= '<tr>';
+	    $cty .= '<td width="15">'.$idx++.'</td>';
+	    $cty .= '<td width="50">'.$value['UnidadesFueraCiudad']['id_movil']."</td>";
+	    $cty .= '<td width="180">'.$localidades[$value['UnidadesFueraCiudad']['id_localidad']]."</td>";
+	    $cty .= '<td width="180">'.$TpoServicio[$value['UnidadesFueraCiudad']['id_tpo_servicio']]."</td>";
+	    $cty .= '<td width="80">'.$value['UnidadesFueraCiudad']['hora_salida']."</td>";
+	    $cty .= '<td width="80">'.$value['UnidadesFueraCiudad']['hora_llegada']."</td>";
+	    $cty .= "<td>".$value['UnidadesFueraCiudad']['mom_r']."</td>";
+	    $cty .= "</tr>";
+	}
+	
+	$tel .= '</table>';
+	$prog .= '</table>';
+	$cty .= '</table>';
+	
+	$html['ServiciosTelefonicos'] = $tel;
+	$html['ServiciosProgramados'] = $prog;
+	$html['UnidadesFueraCiudad'] = $cty;
+
+	$this->colonias(); //$colonia
+	$this->street(); //$street
+	$this->set('turno',$turno);
+	$this->set('username',$username);
+	$this->set('date',$date);
+	$this->set('week',$week);
+	$this->set('html',$html);
+	$this->set('mkpdf',$this->data['Pdf']['data']);
+	$this->layout='pdf';
+    }
+
+    function PrintReport(){
+	pr($this->data);
+    }
+
+    
+  } //End Controller
+
+
+
+
+
+
+
+
+
+
+
+?>
